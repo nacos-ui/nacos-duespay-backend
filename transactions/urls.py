@@ -6,14 +6,14 @@ from .views import (
     PaymentStatusView,
     TransactionReceiptDetailView,
     TransactionViewSet,
-    paystack_webhook,
+    ercaspay_webhook,
 )
 
 router = DefaultRouter()
 router.register("", TransactionViewSet)
 
 urlpatterns = [
-    path("webhook/", paystack_webhook, name="paystack-webhook"),  # Updated
+    path("webhook/", ercaspay_webhook, name="ercaspay-webhook"),  # Updated
     path(
         "receipts/<str:receipt_id>/",
         TransactionReceiptDetailView.as_view(),

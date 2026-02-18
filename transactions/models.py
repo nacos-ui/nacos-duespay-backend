@@ -23,6 +23,9 @@ class Transaction(models.Model):
     reference_id = models.CharField(
         default=generate_unique_reference_id, unique=True, editable=False, max_length=20
     )
+    payment_provider_reference = models.CharField(
+        max_length=100, blank=True, null=True, help_text="Reference from payment provider (e.g. Ercaspay)"
+    )
     proof_of_payment = CloudinaryField(
         "file",
         folder="Duespay/proofs",

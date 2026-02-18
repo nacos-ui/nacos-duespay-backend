@@ -125,22 +125,20 @@ NUBAPI_TOKEN = config("NUBAPI_KEY", default="")
 PLATFORM_PAYOUT_FEE_NGN = 55
 PLATFORM_PAYIN_PERCENT = 0.018
 
-KORAPAY_BASE_URL = "https://api.korapay.com/merchant/api/v1"
+
 
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
 
+ERCASPAY_BASE_URL = config("ERCASPAY_BASE_URL", default="https://api.ercaspay.com/api/v1")
+
 # OCR_SPACE_API_KEY = config('OCR_SPACE_API_KEY', default='helloworld')
 
+# Logging configuration
 # Logging configuration
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {
-        "file": {
-            "level": "INFO",
-            "class": "logging.FileHandler",
-            "filename": "korapay_webhooks.log",
-        },
         "console": {
             "level": "INFO",
             "class": "logging.StreamHandler",
@@ -148,17 +146,17 @@ LOGGING = {
     },
     "loggers": {
         "main.views": {
-            "handlers": ["file", "console"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": True,
         },
         "main.services": {
-            "handlers": ["file", "console"],
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": True,
         },
-        "payments.services": {
-            "handlers": ["file", "console"],
+        "transactions.views": {
+            "handlers": ["console"],
             "level": "INFO",
             "propagate": True,
         },

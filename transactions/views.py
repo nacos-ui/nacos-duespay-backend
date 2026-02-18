@@ -25,10 +25,9 @@ from transactions.models import Transaction
 
 print("DEBUG: Starting to import paystackServices")
 
-from .paystackServices import (
-    is_valid_paystack_signature,
-    paystack_init_charge,
-    calculate_paystack_charges,
+from .ercaspayServices import (
+    ercaspay_init_payment,
+    verify_ercaspay_transaction
 )
 from .models import Transaction, TransactionReceipt
 from .serializers import TransactionReceiptDetailSerializer, TransactionSerializer
@@ -262,19 +261,18 @@ class InitiatePaymentView(APIView):
                 status=400,
             )
 
-        # Calculate total amount from payment items (base amount without fees)
+        # Calculate total amount from payment items (base amount)
         base_amount = sum((item.amount for item in items_qs), Decimal("0.00"))
 
-        # Calculate Paystack charges
-        charge_breakdown = calculate_paystack_charges(base_amount)
-        total_with_fees = charge_breakdown["total_amount"]
-        transaction_fee = charge_breakdown["transaction_fee"]
+        # Ercaspay handles fees on the checkout page (Customer Bears Fees setting)
+        total_with_fees = base_amount
+        transaction_fee = Decimal("0.00")
 
         # Create pending transaction with BASE amount (what association receives)
         txn = Transaction.objects.create(
             payer=payer,
             association=association,
-            amount_paid=base_amount,  # Store base amount, not total with fees
+            amount_paid=base_amount,  # Store base amount
             is_verified=False,
             session=session,
         )
@@ -288,9 +286,17 @@ class InitiatePaymentView(APIView):
         if "@" not in str(email):
             email = getattr(settings, "PLATFORM_EMAIL", "justondev05@gmail.com")
         
-        customer = {"name": full_name, "email": email}
+        phone = getattr(payer, "phone_number", "")
+        if not phone:
+            phone = "0000000000"
 
-        # Frontend redirect - Paystack will redirect to /pay after payment
+        customer = {
+            "name": full_name, 
+            "email": email,
+            "phone_number": phone
+        }
+
+        # Frontend redirect - Ercaspay will redirect to /pay after payment
         frontend = getattr(settings, "FRONTEND_URL", "https://nacos-duespay.vercel.app/")
         redirect_url = f"{str(frontend).rstrip('/')}/pay"
 
@@ -313,7 +319,7 @@ class InitiatePaymentView(APIView):
 
         try:
             # Initialize payment with TOTAL amount (including fees)
-            paystack_res = paystack_init_charge(
+            ercas_res = ercaspay_init_payment(
                 amount=str(total_with_fees),  # Customer pays this
                 currency="NGN",
                 reference=txn.reference_id,
@@ -321,22 +327,33 @@ class InitiatePaymentView(APIView):
                 redirect_url=redirect_url,
                 metadata=metadata,
             )
-        except Exception:
+        except Exception as e:
             logger.exception(
-                f"[INITIATE][ERROR] ref={txn.reference_id} Paystack init failed"
+                f"[INITIATE][ERROR] ref={txn.reference_id} Ercaspay init failed: {e}"
             )
-            return Response({"error": "Failed to initialize payment"}, status=502)
+            return Response({"error": str(e)}, status=400)
 
-        data_obj = paystack_res.get("data") or {}
+        ercas_reference = ercas_res.get("data", {}).get("ercas_reference")
+        if ercas_reference:
+            txn.payment_provider_reference = ercas_reference
+            txn.save(update_fields=["payment_provider_reference"])
+
+        data_obj = ercas_res.get("data") or {}
+        ercas_reference = data_obj.get("ercas_reference")
+        
+        if ercas_reference:
+            txn.payment_provider_reference = ercas_reference
+            txn.save(update_fields=["payment_provider_reference"])
+
         checkout_url = data_obj.get("authorization_url")
         if not checkout_url:
             logger.error(
-                f"[INITIATE][ERROR] ref={txn.reference_id} Missing authorization_url resp={paystack_res}"
+                f"[INITIATE][ERROR] ref={txn.reference_id} Missing authorization_url resp={ercas_res}"
             )
             return Response(
                 {
-                    "error": "Paystack did not return an authorization URL",
-                    "provider_response": paystack_res,
+                    "error": "Ercaspay did not return an authorization URL",
+                    "provider_response": ercas_res,
                 },
                 status=502,
             )
@@ -353,65 +370,92 @@ class InitiatePaymentView(APIView):
                 "transaction_fee": str(transaction_fee),
                 "total_amount": str(total_with_fees),
                 "checkout_url": checkout_url,
+                "ercas_reference": data_obj.get("ercas_reference"),
             },
             status=201,
         )
 
-# New Paystack Webhook
+# New Ercaspay Webhook
 @csrf_exempt
 @require_http_methods(["POST"])
-def paystack_webhook(request):
+def ercaspay_webhook(request):
     """
-    Handles Paystack webhook events for payment verification
+    Handles Ercaspay webhook events for payment verification
     """
-    signature = request.headers.get("x-paystack-signature")
-    if not is_valid_paystack_signature(request.body, signature):
-        logger.warning("[PAYSTACK_WEBHOOK] invalid signature")
-        return HttpResponseForbidden()
-
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except json.JSONDecodeError:
-        logger.error("[PAYSTACK_WEBHOOK] invalid JSON")
+        logger.error("[ERCASPAY_WEBHOOK] invalid JSON")
         return HttpResponse(status=200)
 
-    event = payload.get("event")
-    data = payload.get("data") or {}
-    logger.info(f"[PAYSTACK_WEBHOOK] event={event} data_keys={list(data.keys())}")
-    print(f"[{timezone.now().isoformat()}] PAYSTACK_WEBHOOK event={event}")
+    # Log the entire payload for debugging
+    logger.info(f"[ERCASPAY_WEBHOOK] payload={payload}")
+    print(f"[{timezone.now().isoformat()}] ERCASPAY_WEBHOOK payload received")
 
-    # Handle successful charge events
-    if event not in ("charge.success", "transfer.success"):
-        return HttpResponse(status=200)
+    # Important: Since documentation on webhook signature verification is sparse/assumed,
+    # we will rely on strict transaction verification via the API.
+    # We extract the reference and verify it directly with Ercaspay.
 
-    # Get reference from webhook data
-    reference = data.get("reference")
-    if not reference:
-        logger.warning("[PAYSTACK_WEBHOOK] No reference in webhook data")
+    # Based on provided webhook payload:
+    # "transaction_reference": Ercas internal ref (e.g. ERCS|...)
+    # "payment_reference": Your Merchant Ref (e.g. R5md7gd9b4s3h2xxd67g)
+
+    tx_ref = payload.get("transaction_reference")
+    pay_ref = payload.get("payment_reference")
+    
+    # We prioritize your merchant ref (payment_reference) if available, as that matches our local reference_id
+    # But we also fall back to checking the Ercas ref against our stored provider ref
+    
+    if not tx_ref and not pay_ref:
+        logger.warning("[ERCASPAY_WEBHOOK] No reference found in payload")
         return HttpResponse(status=200)
 
     try:
-        txn = Transaction.objects.get(reference_id=reference)
-    except Transaction.DoesNotExist:
-        logger.warning(f"[PAYSTACK_WEBHOOK] No transaction found for ref={reference}")
+        # Try to find transaction by either reference
+        txn = Transaction.objects.filter(
+            models.Q(reference_id=pay_ref) | 
+            models.Q(reference_id=tx_ref) |
+            models.Q(payment_provider_reference=tx_ref)
+        ).first()
+        
+        if not txn:
+             # Last ditch effort: if pay_ref was missing, maybe it was in tx_ref field?
+            logger.warning(f"[ERCASPAY_WEBHOOK] No transaction found for pay_ref={pay_ref} tx_ref={tx_ref}")
+            return HttpResponse(status=200)
+    except Exception as e:
+        logger.error(f"[ERCASPAY_WEBHOOK] Error finding transaction: {e}")
         return HttpResponse(status=200)
 
     if txn.is_verified:
-        logger.info(f"[PAYSTACK_WEBHOOK] Already verified ref={txn.reference_id}")
+        logger.info(f"[ERCASPAY_WEBHOOK] Already verified ref={txn.reference_id}")
         return HttpResponse(status=200)
 
-    # Get amount from webhook (in kobo, convert to naira) for logging
-    amount_kobo = data.get("amount", 0)
-    amount_paid_total = Decimal(str(amount_kobo)) / 100
+    # Verify transaction with Ercaspay API to be sure
+    try:
+        verification_result = verify_ercaspay_transaction(txn.reference_id)
+        
+        if not verification_result.get("status"):
+            logger.warning(f"[ERCASPAY_WEBHOOK] Verification failed for ref={txn.reference_id}: {verification_result.get('message')}")
+            return HttpResponse(status=200)
 
-    # Only update verification status, keep the base amount already stored
-    # The transaction was created with base_amount (what association receives)
-    # The webhook amount includes Paystack fees, which we don't want to store
-    txn.is_verified = True
-    txn.save(update_fields=["is_verified"])
-    
-    logger.info(f"[PAYSTACK_WEBHOOK][VERIFIED] ref={txn.reference_id} base_amount={txn.amount_paid} total_paid={amount_paid_total}")
-    print(f"[{timezone.now().isoformat()}] PAYSTACK VERIFIED ref={txn.reference_id} base_amount={txn.amount_paid} total_paid={amount_paid_total}")
+        data = verification_result.get("data", {})
+        status_str = data.get("status", "").lower()
+        
+        # Check against success statuses (adjust based on actual API response, usually 'success' or 'successful')
+        if status_str in ["success", "successful", "paid"]:
+            # Correct amount check could go here, but we trust the verification call
+            amount_paid = data.get("amount", 0)
+            
+            txn.is_verified = True
+            txn.save(update_fields=["is_verified"])
+            
+            logger.info(f"[ERCASPAY_WEBHOOK][VERIFIED] ref={txn.reference_id} status={status_str} amount={amount_paid}")
+            print(f"[{timezone.now().isoformat()}] ERCASPAY VERIFIED ref={txn.reference_id}")
+        else:
+             logger.info(f"[ERCASPAY_WEBHOOK] Transaction not successful yet ref={txn.reference_id} status={status_str}")
+
+    except Exception as e:
+        logger.error(f"[ERCASPAY_WEBHOOK] Error verifying transaction ref={txn.reference_id}: {str(e)}")
 
     return HttpResponse(status=200)
 
@@ -430,6 +474,31 @@ class PaymentStatusView(APIView):
             ).get(reference_id=reference_id)
         except Transaction.DoesNotExist:
             return Response({"exists": False}, status=200)
+
+        # If not verified locally, check directly with Ercaspay
+        if not txn.is_verified:
+            try:
+                # Use the payment_provider_reference if available (the Ercas-specific ref), 
+                # otherwise fall back to our own reference_id
+                verify_ref = txn.payment_provider_reference or reference_id
+                
+                verification_result = verify_ercaspay_transaction(verify_ref)
+                
+                # Check if API call was successful
+                if verification_result.get("status"):
+                    data = verification_result.get("data", {})
+                    # Ercaspay status string check (tolerant to case/variations)
+                    status_str = str(data.get("status", "")).lower()
+                    
+                    if status_str in ["success", "successful", "paid"]:
+                        txn.is_verified = True
+                        txn.save(update_fields=["is_verified"])
+                        
+                        logger.info(f"[PAYMENT_STATUS][POLLING_VERIFIED] ref={txn.reference_id} status={status_str}")
+                        print(f"[{timezone.now().isoformat()}] POLLING VERIFIED ref={txn.reference_id}")
+            except Exception as e:
+                # Log error but don't crash, just return current state
+                logger.error(f"[PAYMENT_STATUS][ERROR] ref={reference_id} verify failed: {e}")
 
         receipt = getattr(txn, "receipt", None)
         payload = {

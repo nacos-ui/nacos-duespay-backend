@@ -53,18 +53,11 @@ EMAIL_HOST_USER = "jcmailer.1@gmail.com"
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = f"DUESPAY <{EMAIL_HOST_USER}>"
 
-KORAPAY_SECRET_KEY = config("KORAPAY_TEST_SECRET_KEY", default="")
-KORAPAY_PUBLIC_KEY = config("KORAPAY_TEST_PUBLIC_KEY", default="")
-KORAPAY_ENCRYPTION_KEY = config("KORAPAY_TEST_ENCRYPTION_KEY", default="")
 
-PAYSTACK_SECRET = config('PAYSTACK_SECRET', default="")
-PAYSTACK_PUBLIC = config('PAYSTACK_PUBLIC', default="")
-PAYSTACK_WEBHOOK_SECRET = config('PAYSTACK_WEBHOOK_SECRET', default="")
-PAYSTACK_WEBHOOK_URL = config('PAYSTACK_WEBHOOK_URL', default="https://f43d38558991.ngrok-free.app/api/transactions/webhook/")
 
-DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+ERCASPAY_SECRET_KEY = config("ERCASPAY_SECRET_KEY", default="")
+
+
 
 FRONTEND_URL = "http://localhost:5173"
 BACKEND_URL = "http://localhost:8000"
-NGROK_URL = "https://300e5c2440fa.ngrok-free.app"
-KORAPAY_WEBHOOK_URL = f"{NGROK_URL}/api/transactions/webhook/"

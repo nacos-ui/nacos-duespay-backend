@@ -78,19 +78,16 @@ ANYMAIL = {
     "BREVO_API_KEY": config("BREVO_API_KEY"),
 }
 
-DEFAULT_FROM_EMAIL = "DuesPay <jcmailer.1@gmail.com>"
+DEFAULT_FROM_EMAIL = "DuesPay <no-reply@duespay.app>"
+SERVER_EMAIL = "no-reply@duespay.app"
 
-KORAPAY_SECRET_KEY = config("KORAPAY_SECRET_KEY", default="")
-KORAPAY_PUBLIC_KEY = config("KORAPAY_PUBLIC_KEY", default="")
-KORAPAY_ENCRYPTION_KEY = config("KORAPAY_ENCRYPTION_KEY", default="")
+ERCASPAY_SECRET_KEY = config("ERCASPAY_SECRET_KEY", default="")
 
-PAYSTACK_SECRET = config('PAYSTACK_SECRET', default="")
-PAYSTACK_PUBLIC = config('PAYSTACK_PUBLIC', default="")
-PAYSTACK_WEBHOOK_SECRET = config('PAYSTACK_WEBHOOK_SECRET', default="")
-PAYSTACK_WEBHOOK_URL = config('PAYSTACK_WEBHOOK_URL', default="https://f43d38558991.ngrok-free.app/api/transactions/webhook/")
+
+
+
 
 DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 
 FRONTEND_URL = "https://nacos-duespay.vercel.app"
 BACKEND_URL = "https://duespay-backend.onrender.com"
-KORAPAY_WEBHOOK_URL = f"{BACKEND_URL}/api/transactions/webhook/"
