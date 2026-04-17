@@ -22,24 +22,26 @@ def notify_admin_on_transaction(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Transaction)
 def create_receipt_on_verification(sender, instance, created, **kwargs):
     """Signal: Create and send receipt when transaction is verified"""
-    # Only proceed if transaction is verified
-    if instance.is_verified:
+    # Only proceed if transaction was just verified
+    # Check if 'is_verified' was changed in this save
+    update_fields = kwargs.get('update_fields')
+    
+    if instance.is_verified and (created or (update_fields and 'is_verified' in update_fields)):
         try:
-            # Get existing receipt or create new one
+            # Use get_or_create but only send the email if it was JUST created
             receipt, receipt_created = TransactionReceipt.objects.get_or_create(
                 transaction=instance
             )
 
-            # Always generate and send receipt (whether new or existing)
-            send_receipt_email(receipt)
-
             if receipt_created:
+                send_receipt_email(receipt)
                 print(
                     f"✅ New receipt created and sent for transaction {instance.reference_id}"
                 )
             else:
+                # Receipt already exists, don't resend email on every status poll
                 print(
-                    f"✅ Existing receipt resent for transaction {instance.reference_id}"
+                    f"ℹ️ Receipt already exists for transaction {instance.reference_id}"
                 )
 
         except Exception as e:

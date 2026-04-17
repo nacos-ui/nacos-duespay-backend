@@ -1,11 +1,11 @@
 from datetime import datetime
-
 from django.conf import settings
-from django.core.mail import EmailMessage, EmailMultiAlternatives
+from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 
 
 def send_admin_new_transaction_email(admin, association, transaction):
+    """Email: Notify admin of a new transaction"""
     subject = "New Transaction Alert"
     context = {
         "admin": admin,
@@ -13,22 +13,14 @@ def send_admin_new_transaction_email(admin, association, transaction):
         "transaction": transaction,
     }
     html_content = render_to_string("transactions/new_transaction.html", context)
-    text_content = (
-        f"Dear {admin.first_name},\n\n"
-        f"A new transaction has been made in your association ({association.association_name}).\n"
-        f"Reference ID: {transaction.reference_id}\n"
-        f"Payer: {transaction.payer.first_name} {transaction.payer.last_name}\n"
-        f"Amount Paid: {transaction.amount_paid}\n"
-        f"Date: {getattr(transaction, 'submitted_at', '')}\n\n"
-        "Please log in to your dashboard for more details."
+    
+    email = EmailMessage(
+        subject=subject,
+        body=html_content,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[admin.email],
     )
-    email = EmailMultiAlternatives(
-        subject,
-        text_content,
-        settings.DEFAULT_FROM_EMAIL,
-        [admin.email],
-    )
-    email.attach_alternative(html_content, "text/html")
+    email.content_subtype = "html"
     email.send(fail_silently=False)
 
 
@@ -49,7 +41,7 @@ def send_receipt_email(receipt):
         "transaction_date": transaction.submitted_at.strftime("%Y-%m-%d %H:%M:%S"),
         "association_name": association.association_name,
         "association_logo": association.logo.url if association.logo else "",
-        "association_no": association.admin.phone_number,
+        "association_no": association.admin.phone_number if association.admin else "",
         "amount_paid": transaction.amount_paid,
         "transaction_receipt_url": f"{settings.FRONTEND_URL}/transactions/receipt/{receipt.receipt_id}/",
     }

@@ -4,7 +4,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction as db_transaction
 from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -478,24 +478,30 @@ class PaymentStatusView(APIView):
         # If not verified locally, check directly with Ercaspay
         if not txn.is_verified:
             try:
-                # Use the payment_provider_reference if available (the Ercas-specific ref), 
-                # otherwise fall back to our own reference_id
-                verify_ref = txn.payment_provider_reference or reference_id
-                
-                verification_result = verify_ercaspay_transaction(verify_ref)
-                
-                # Check if API call was successful
-                if verification_result.get("status"):
-                    data = verification_result.get("data", {})
-                    # Ercaspay status string check (tolerant to case/variations)
-                    status_str = str(data.get("status", "")).lower()
+                with db_transaction.atomic():
+                    # Use a select_for_update to lock the row and prevent concurrent verification
+                    lock_txn = Transaction.objects.select_for_update().get(pk=txn.pk)
                     
-                    if status_str in ["success", "successful", "paid"]:
-                        txn.is_verified = True
-                        txn.save(update_fields=["is_verified"])
+                    if not lock_txn.is_verified:
+                        # Use the payment_provider_reference if available (the Ercas-specific ref), 
+                        # otherwise fall back to our own reference_id
+                        verify_ref = lock_txn.payment_provider_reference or reference_id
                         
-                        logger.info(f"[PAYMENT_STATUS][POLLING_VERIFIED] ref={txn.reference_id} status={status_str}")
-                        print(f"[{timezone.now().isoformat()}] POLLING VERIFIED ref={txn.reference_id}")
+                        verification_result = verify_ercaspay_transaction(verify_ref)
+                        
+                        # Check if API call was successful
+                        if verification_result.get("status"):
+                            data = verification_result.get("data", {})
+                            # Ercaspay status string check (tolerant to case/variations)
+                            status_str = str(data.get("status", "")).lower()
+                            
+                            if status_str in ["success", "successful", "paid"]:
+                                lock_txn.is_verified = True
+                                lock_txn.save(update_fields=["is_verified"])
+                                txn.is_verified = True  # Update local object for response
+                                
+                                logger.info(f"[PAYMENT_STATUS][POLLING_VERIFIED] ref={lock_txn.reference_id} status={status_str}")
+                                print(f"[{timezone.now().isoformat()}] POLLING VERIFIED ref={lock_txn.reference_id}")
             except Exception as e:
                 # Log error but don't crash, just return current state
                 logger.error(f"[PAYMENT_STATUS][ERROR] ref={reference_id} verify failed: {e}")

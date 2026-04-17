@@ -20,7 +20,7 @@
           style="width: 50px; height: 50px; object-fit: contain; background: #fff; border-radius: 50%; padding: 4px;">
       </div>
       {% endif %}
-      <h1 style="color: #fff; margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.5px;">New Payment Received
+      <h1 style="color: #fff; margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.5px;">New Transaction Initiated
       </h1>
     </div>
 
@@ -28,32 +28,28 @@
     <div style="padding: 35px 30px;">
       <p style="margin: 0 0 20px; font-size: 15px;">Hello {{ admin.first_name }},</p>
       <p style="margin: 0 0 30px; color: #475569; font-size: 15px;">
-        You have received a new payment for <strong>{{ association.association_name }}</strong>.
+        A new transaction has just been initiated for <strong>{{ association.association_name }}</strong>.
       </p>
 
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px;">
         <div style="text-align: center; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px dashed #cbd5e1;">
           <p style="margin: 0; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Amount
-            Received</p>
-          <p style="margin: 5px 0 0; font-size: 24px; font-weight: 700; color: #0f172a;">₦{{
-            transaction.amount_paid|floatformat:2 }}</p>
+            to pay</p>
+          <p style="margin: 5px 0 0; font-size: 24px; font-weight: 700; color: #0f172a;">₦{{ transaction.amount_paid|floatformat:2 }}</p>
         </div>
 
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Payer</td>
-            <td style="padding: 6px 0; text-align: right; color: #0f172a; font-weight: 500; font-size: 14px;">{{
-              transaction.payer.first_name }} {{ transaction.payer.last_name }}</td>
+            <td style="padding: 6px 0; text-align: right; color: #0f172a; font-weight: 500; font-size: 14px;">{{ transaction.payer.first_name }} {{ transaction.payer.last_name }}</td>
           </tr>
           <tr>
             <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Reference</td>
-            <td style="padding: 6px 0; text-align: right; color: #0f172a; font-weight: 500; font-size: 14px;">{{
-              transaction.reference_id }}</td>
+          <td style="padding: 6px 0; text-align: right; color: #0f172a; font-weight: 500; font-size: 14px;">{{ transaction.reference_id }}</td>
           </tr>
           <tr>
             <td style="padding: 6px 0; color: #64748b; font-size: 14px;">Date</td>
-            <td style="padding: 6px 0; text-align: right; color: #0f172a; font-weight: 500; font-size: 14px;">{{
-              transaction.submitted_at|date:"M d, Y H:i" }}</td>
+            <td style="padding: 6px 0; text-align: right; color: #0f172a; font-weight: 500; font-size: 14px;">{{ transaction.submitted_at|date:"M d, Y H:i" }}</td>
           </tr>
         </table>
       </div>
