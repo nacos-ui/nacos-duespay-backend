@@ -12,6 +12,8 @@ class AssociationSerializer(serializers.ModelSerializer):
     bank_account = ReceiverBankAccountSerializer(read_only=True)
     payment_items = serializers.SerializerMethodField()
     logo_url = serializers.ReadOnlyField()
+    admin_email = serializers.ReadOnlyField(source="admin.email")
+    admin_phone = serializers.ReadOnlyField(source="admin.phone_number")
     # payers = PayerSerializer(many=True, read_only=True)
 
     def get_payment_items(self, obj):
@@ -67,7 +69,7 @@ class AssociationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Association
         fields = "__all__"
-        read_only_fields = ["admin", "bank_account", "payment_items", "logo_url"]
+        read_only_fields = ["admin", "bank_account", "payment_items", "logo_url", "admin_email", "admin_phone"]
 
 
 class NotificationSerializer(serializers.ModelSerializer):

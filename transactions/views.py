@@ -164,11 +164,14 @@ class TransactionViewSet(viewsets.ModelViewSet):
             queryset.aggregate(total=models.Sum("amount_paid"))["total"] or 0
         )
 
-        # Completed Payments (assuming is_verified=True means completed)
-        completed_count = queryset.filter(is_verified=True).count()
+        completed_qs = queryset.filter(is_verified=True)
+        pending_qs = queryset.filter(is_verified=False)
 
-        # Pending Payments (assuming is_verified=False means pending)
-        pending_count = queryset.filter(is_verified=False).count()
+        completed_count = completed_qs.count()
+        completed_amount = completed_qs.aggregate(total=models.Sum("amount_paid"))["total"] or 0
+
+        pending_count = pending_qs.count()
+        pending_amount = pending_qs.aggregate(total=models.Sum("amount_paid"))["total"] or 0
 
         # Calculate percentages
         total_count = queryset.count()
@@ -182,7 +185,9 @@ class TransactionViewSet(viewsets.ModelViewSet):
         meta = {
             "total_collections": float(total_collections),
             "completed_payments": completed_count,
+            "completed_amount": float(completed_amount),
             "pending_payments": pending_count,
+            "pending_amount": float(pending_amount),
             "total_transactions": total_count,
             "percent_collections": "-",  # You can calculate this based on your business logic
             "percent_completed": f"{percent_completed}%",
