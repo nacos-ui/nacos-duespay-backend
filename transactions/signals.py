@@ -6,11 +6,17 @@ from .models import Transaction, TransactionReceipt
 
 @receiver(post_save, sender=Transaction)
 def notify_admin_on_transaction(sender, instance, created, **kwargs):
+    print(f"DEBUG: notify_admin_on_transaction triggered. Created={created}")
     if created:
         association = instance.association
-        admin = association.admin
-        if admin.email:
+        print(f"DEBUG: Association: {association}")
+        admin = getattr(association, "admin", None)
+        print(f"DEBUG: Admin: {admin}")
+        if admin and admin.email:
+            print(f"DEBUG: Sending email to admin: {admin.email}")
             send_admin_new_transaction_email(admin, association, instance)
+        else:
+            print("DEBUG: Admin or admin email missing.")
 
 
 @receiver(post_save, sender=Transaction)
