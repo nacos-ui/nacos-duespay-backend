@@ -105,6 +105,11 @@ class SessionSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Get association from context
         association = self.context.get("association")
+        if not association:
+            raise serializers.ValidationError(
+                {"association": "No association found. Please ensure you have created an association profile first."}
+            )
+        
         validated_data["association"] = association
         if not validated_data.get("start_date"):
             validated_data["start_date"] = date.today()

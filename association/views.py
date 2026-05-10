@@ -195,7 +195,7 @@ class SessionViewSet(viewsets.ModelViewSet):
             association.current_session = session
             association.save()
         else:
-            session = serializer.save()
+            raise ValidationError("No association found for this user. Please create an association first.")
 
     @action(detail=True, methods=["post"])
     def set_current(self, request, pk=None):

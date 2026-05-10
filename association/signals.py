@@ -9,7 +9,7 @@ from .models import Association
 
 @receiver(post_save, sender=AdminUser)
 def create_association_for_user(sender, instance, created, **kwargs):
-    if created:
+    if created and not instance.is_superuser:
         base_short_name = instance.email.split("@")[0].lower()
         short_name = base_short_name
         counter = 1
