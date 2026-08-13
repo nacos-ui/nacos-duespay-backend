@@ -129,7 +129,7 @@ PLATFORM_PAYIN_PERCENT = 0.018
 
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
 
-ERCASPAY_BASE_URL = config("ERCASPAY_BASE_URL", default="https://api.ercaspay.com/api/v1")
+ERCASPAY_BASE_URL = config("ERCASPAY_BASE_URL", default="https://api.phoenix-wallet.ercaspay.com/api/v1")
 
 # OCR_SPACE_API_KEY = config('OCR_SPACE_API_KEY', default='helloworld')
 

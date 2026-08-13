@@ -70,6 +70,7 @@ class AssociationSerializer(serializers.ModelSerializer):
         model = Association
         fields = "__all__"
         read_only_fields = ["admin", "bank_account", "payment_items", "logo_url", "admin_email", "admin_phone"]
+        # is_maintenance_mode is intentionally writable so admins can toggle it
 
 
 class NotificationSerializer(serializers.ModelSerializer):
