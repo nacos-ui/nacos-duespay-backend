@@ -18,14 +18,26 @@ def custom_exception_handler(exc, context):
             if isinstance(response.data, dict):
                 for field, errors in response.data.items():
                     if isinstance(errors, list):
-                        custom_response_data["errors"][field] = errors[0]
+                        custom_response_data["errors"][field] = str(errors[0])
                     else:
                         custom_response_data["errors"][field] = str(errors)
+            elif isinstance(response.data, list):
+                custom_response_data["errors"]["non_field_errors"] = str(response.data[0])
+            else:
+                custom_response_data["errors"]["non_field_errors"] = str(response.data)
 
-                if len(custom_response_data["errors"]) == 1:
-                    field_name = list(custom_response_data["errors"].keys())[0]
-                    error_message = custom_response_data["errors"][field_name]
-                    custom_response_data["message"] = error_message
+            # Fallback for empty errors to see what the actual exception is
+            if not custom_response_data["errors"]:
+                custom_response_data["errors"]["debug_exception"] = str(exc)
+                try:
+                    custom_response_data["errors"]["debug_detail"] = str(getattr(exc, 'detail', 'No detail'))
+                except Exception:
+                    pass
+
+            if len(custom_response_data["errors"]) == 1:
+                field_name = list(custom_response_data["errors"].keys())[0]
+                error_message = custom_response_data["errors"][field_name]
+                custom_response_data["message"] = error_message
 
             return Response(custom_response_data, status=response.status_code)
 

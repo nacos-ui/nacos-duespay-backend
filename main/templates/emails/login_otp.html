@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your DuesPay Login OTP</title>
+</head>
+
+<body
+  style="background-color: #f5f7fa; color: #0F111F; font-family: 'Segoe UI', Arial, sans-serif; padding: 20px 0; margin: 0; line-height: 1.5;">
+  <div
+    style="max-width: 500px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+
+    <!-- Header -->
+    <div style="background-color: #0f172a; padding: 25px 20px; text-align: center;">
+      <h1 style="color: #fff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">DUESPAY</h1>
+    </div>
+
+    <!-- Content -->
+    <div style="padding: 40px 30px; text-align: center;">
+      <p style="margin: 0 0 20px; font-size: 15px; text-align: left;">Hello {{ first_name }},</p>
+      <p style="margin: 0 0 30px; color: #475569; font-size: 15px; text-align: left;">
+        You requested a One-Time Password to log into your DuesPay account. Here is your code:
+      </p>
+
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin-bottom: 30px; display: inline-block;">
+        <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #0f172a;">{{ otp }}</span>
+      </div>
+
+      <p style="margin: 0; color: #94a3b8; font-size: 13px; text-align: left;">
+        This code is valid for <strong>10 minutes</strong>. If you didn't request this, you can safely ignore this email.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background-color: #f1f5f9; padding: 15px; text-align: center; border-top: 1px solid #e2e8f0;">
+      <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+        &copy; {{ current_year }} DuesPay
+      </p>
+    </div>
+  </div>
+</body>
+
+</html>

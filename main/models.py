@@ -8,12 +8,21 @@ class AdminUser(AbstractUser):
         ("google", "Google"),
     )
 
+    ROLE_CHOICES = (
+        ("superadmin", "Superadmin"),
+        ("admin", "Admin"),
+    )
+
     username = models.CharField(max_length=150, unique=False, blank=True, null=True)
     email = models.EmailField(unique=True, blank=False, null=False)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     is_first_login = models.BooleanField(default=True)
     token_version = models.IntegerField(default=0)
     auth_mode = models.CharField(max_length=10, choices=AUTH_MODES, default="email")
+    role = models.CharField(max_length=15, choices=ROLE_CHOICES, default="superadmin")
+    association = models.ForeignKey("association.Association", on_delete=models.CASCADE, related_name="admins", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

@@ -34,7 +34,11 @@ class Transaction(models.Model):
         null=True,
     )  # made optional
     is_verified = models.BooleanField(default=False)
+    is_expired = models.BooleanField(default=False)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    charge_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     submitted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     session = models.ForeignKey(
         Session, on_delete=models.CASCADE, related_name="transactions"
     )

@@ -33,6 +33,7 @@ def send_receipt_email(receipt):
 
     subject = f"Payment Receipt #{receipt_no} - {association.association_name}"
 
+    admin = association.admins.first()
     context = {
         "payer_name": f"{transaction.payer.first_name} {transaction.payer.last_name}",
         "receipt_no": receipt_no,
@@ -41,7 +42,7 @@ def send_receipt_email(receipt):
         "transaction_date": transaction.submitted_at.strftime("%Y-%m-%d %H:%M:%S"),
         "association_name": association.association_name,
         "association_logo": association.logo.url if association.logo else "",
-        "association_no": association.admin.phone_number if association.admin else "",
+        "association_no": admin.phone_number if admin else "",
         "amount_paid": transaction.amount_paid,
         "transaction_receipt_url": f"{settings.FRONTEND_URL}/transactions/receipt/{receipt.receipt_id}/",
     }

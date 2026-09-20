@@ -89,6 +89,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 | models.Q(payer__matric_number__icontains=search)
             )
 
+        # Exact match for payer id
+        payer_id = self.request.query_params.get("payer_id")
+        if payer_id:
+            queryset = queryset.filter(payer_id=payer_id)
+
         return queryset
 
     def perform_create(self, serializer):
@@ -142,8 +147,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
                         "total_collections": 0,
                         "completed_payments": 0,
                         "pending_payments": 0,
+                        "expired_payments": 0,
                         "total_transactions": 0,
-                        "percent_collections": "-",
                         "percent_completed": "-",
                         "percent_pending": "-",
                         "current_session": None,
@@ -151,35 +156,57 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        queryset = self.filter_queryset(self.get_queryset()).order_by("-submitted_at")
-        page = self.paginate_queryset(queryset)
+        # Base queryset for stats
+        full_queryset = self.filter_queryset(self.get_queryset())
+        
+        # Filtered queryset for displaying in the table
+        status_param = self.request.query_params.get("status")
+        if status_param == "expired":
+            display_queryset = full_queryset.filter(is_expired=True).order_by("-submitted_at")
+        elif status_param == "unverified":
+            display_queryset = full_queryset.filter(is_verified=False, is_expired=False).order_by("-submitted_at")
+        elif status_param == "verified":
+            display_queryset = full_queryset.filter(is_verified=True).order_by("-submitted_at")
+        else:
+            # Default: exclude expired
+            display_queryset = full_queryset.filter(is_expired=False).order_by("-submitted_at")
+        
+        page = self.paginate_queryset(display_queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             data = serializer.data
         else:
-            serializer = self.get_serializer(queryset, many=True)
+            serializer = self.get_serializer(display_queryset, many=True)
             data = serializer.data
 
         total_collections = (
-            queryset.aggregate(total=models.Sum("amount_paid"))["total"] or 0
+            full_queryset.aggregate(total=models.Sum("amount_paid"))["total"] or 0
         )
 
-        completed_qs = queryset.filter(is_verified=True)
-        pending_qs = queryset.filter(is_verified=False)
+        completed_qs = full_queryset.filter(is_verified=True)
+        pending_qs = full_queryset.filter(is_verified=False, is_expired=False)
+        expired_qs = full_queryset.filter(is_expired=True)
 
         completed_count = completed_qs.count()
         completed_amount = completed_qs.aggregate(total=models.Sum("amount_paid"))["total"] or 0
 
         pending_count = pending_qs.count()
         pending_amount = pending_qs.aggregate(total=models.Sum("amount_paid"))["total"] or 0
+        
+        expired_count = expired_qs.count()
+        expired_amount = expired_qs.aggregate(total=models.Sum("amount_paid"))["total"] or 0
 
         # Calculate percentages
-        total_count = queryset.count()
+        total_count = full_queryset.count()
         percent_completed = (
             round((completed_count / total_count * 100), 1) if total_count > 0 else 0
         )
         percent_pending = (
             round((pending_count / total_count * 100), 1) if total_count > 0 else 0
+        )
+
+        percent_expired = (
+            round((expired_count / total_count * 100), 1) if total_count > 0 else 0
         )
 
         meta = {
@@ -188,10 +215,12 @@ class TransactionViewSet(viewsets.ModelViewSet):
             "completed_amount": float(completed_amount),
             "pending_payments": pending_count,
             "pending_amount": float(pending_amount),
+            "expired_payments": expired_count,
+            "expired_amount": float(expired_amount),
             "total_transactions": total_count,
-            "percent_collections": "-",  # You can calculate this based on your business logic
             "percent_completed": f"{percent_completed}%",
             "percent_pending": f"{percent_pending}%",
+            "percent_expired": f"{percent_expired}%",
             "current_session": (
                 {
                     "id": current_session.id,
@@ -273,11 +302,18 @@ class InitiatePaymentView(APIView):
         total_with_fees = base_amount
         transaction_fee = Decimal("0.00")
 
+        # Expire any previous unverified transactions for this session and payer
+        Transaction.objects.filter(
+            payer=payer, session=session, is_verified=False
+        ).update(is_expired=True)
+
         # Create pending transaction with BASE amount (what association receives)
         txn = Transaction.objects.create(
             payer=payer,
             association=association,
             amount_paid=base_amount,  # Store base amount
+            total_amount=base_amount, # Will be updated upon verification
+            charge_amount=Decimal("0.00"),
             is_verified=False,
             session=session,
         )
@@ -311,21 +347,19 @@ class InitiatePaymentView(APIView):
             "association_id": association.id,
             "payer_id": payer.id,
             "base_amount": str(base_amount),
-            "transaction_fee": str(transaction_fee),
-            "total_amount": str(total_with_fees),
         }
 
         logger.info(
-            f"[INITIATE] ref={txn.reference_id} base={base_amount} fee={transaction_fee} total={total_with_fees}"
+            f"[INITIATE] ref={txn.reference_id} base={base_amount}"
         )
         print(
-            f"[{timezone.now().isoformat()}] INITIATE ref={txn.reference_id} base={base_amount} fee={transaction_fee} total={total_with_fees}"
+            f"[{timezone.now().isoformat()}] INITIATE ref={txn.reference_id} base={base_amount}"
         )
 
         try:
             # Initialize payment with TOTAL amount (including fees)
             ercas_res = ercaspay_init_payment(
-                amount=str(total_with_fees),  # Customer pays this
+                amount=str(base_amount),  # Customer pays this, Ercaspay adds fees if configured
                 currency="NGN",
                 reference=txn.reference_id,
                 customer=customer,
@@ -337,11 +371,6 @@ class InitiatePaymentView(APIView):
                 f"[INITIATE][ERROR] ref={txn.reference_id} Ercaspay init failed: {e}"
             )
             return Response({"error": str(e)}, status=400)
-
-        ercas_reference = ercas_res.get("data", {}).get("ercas_reference")
-        if ercas_reference:
-            txn.payment_provider_reference = ercas_reference
-            txn.save(update_fields=["payment_provider_reference"])
 
         data_obj = ercas_res.get("data") or {}
         ercas_reference = data_obj.get("ercas_reference")
@@ -372,8 +401,6 @@ class InitiatePaymentView(APIView):
             {
                 "reference_id": txn.reference_id,
                 "base_amount": str(base_amount),
-                "transaction_fee": str(transaction_fee),
-                "total_amount": str(total_with_fees),
                 "checkout_url": checkout_url,
                 "ercas_reference": data_obj.get("ercas_reference"),
             },
@@ -389,6 +416,8 @@ def ercaspay_webhook(request):
     """
     try:
         payload = json.loads(request.body.decode("utf-8"))
+        if isinstance(payload, str):
+            payload = json.loads(payload)
     except json.JSONDecodeError:
         logger.error("[ERCASPAY_WEBHOOK] invalid JSON")
         return HttpResponse(status=200)
@@ -448,13 +477,17 @@ def ercaspay_webhook(request):
         
         # Check against success statuses (adjust based on actual API response, usually 'success' or 'successful')
         if status_str in ["success", "successful", "paid"]:
-            # Correct amount check could go here, but we trust the verification call
-            amount_paid = data.get("amount", 0)
+            
+            # Update total amount and charge amount if provided by API
+            total_paid = data.get("amount", txn.amount_paid)
+            fee = data.get("fee", 0)
             
             txn.is_verified = True
-            txn.save(update_fields=["is_verified"])
+            txn.total_amount = total_paid
+            txn.charge_amount = fee
+            txn.save(update_fields=["is_verified", "total_amount", "charge_amount"])
             
-            logger.info(f"[ERCASPAY_WEBHOOK][VERIFIED] ref={txn.reference_id} status={status_str} amount={amount_paid}")
+            logger.info(f"[ERCASPAY_WEBHOOK][VERIFIED] ref={txn.reference_id} status={status_str} amount={total_paid}")
             print(f"[{timezone.now().isoformat()}] ERCASPAY VERIFIED ref={txn.reference_id}")
         else:
              logger.info(f"[ERCASPAY_WEBHOOK] Transaction not successful yet ref={txn.reference_id} status={status_str}")
@@ -501,8 +534,13 @@ class PaymentStatusView(APIView):
                             status_str = str(data.get("status", "")).lower()
                             
                             if status_str in ["success", "successful", "paid"]:
+                                total_paid = data.get("amount", lock_txn.amount_paid)
+                                fee = data.get("fee", 0)
+
                                 lock_txn.is_verified = True
-                                lock_txn.save(update_fields=["is_verified"])
+                                lock_txn.total_amount = total_paid
+                                lock_txn.charge_amount = fee
+                                lock_txn.save(update_fields=["is_verified", "total_amount", "charge_amount"])
                                 txn.is_verified = True  # Update local object for response
                                 
                                 logger.info(f"[PAYMENT_STATUS][POLLING_VERIFIED] ref={lock_txn.reference_id} status={status_str}")
@@ -520,3 +558,36 @@ class PaymentStatusView(APIView):
             "receipt_id": getattr(receipt, "receipt_id", None),
         }
         return Response(payload, status=200)
+
+from .serializers import AdminTransactionReceiptSerializer
+
+class AdminTransactionReceiptViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = TransactionReceipt.objects.all()
+    serializer_class = AdminTransactionReceiptSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = TransactionPagination
+
+    def get_queryset(self):
+        association = getattr(self.request.user, 'association', None)
+        if not association:
+            return TransactionReceipt.objects.none()
+
+        session = self.request.query_params.get('session_id')
+        
+        queryset = TransactionReceipt.objects.filter(transaction__association=association)
+
+        if session:
+            queryset = queryset.filter(transaction__session_id=session)
+
+        # Search by receipt_no, matric_number, email, first_name, last_name
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(receipt_no__icontains=search) |
+                models.Q(transaction__payer__first_name__icontains=search) |
+                models.Q(transaction__payer__last_name__icontains=search) |
+                models.Q(transaction__payer__matric_number__icontains=search) |
+                models.Q(transaction__payer__email__icontains=search)
+            )
+
+        return queryset.order_by('-issued_at')

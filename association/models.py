@@ -16,9 +16,6 @@ class Association(models.Model):
         ("other", "Other"),
     ]
 
-    admin = models.OneToOneField(
-        AdminUser, on_delete=models.CASCADE, related_name="association"
-    )
     association_name = models.CharField(max_length=255, unique=True, default="other")
     association_short_name = models.CharField(
         max_length=50, unique=True, default="other"
@@ -41,6 +38,8 @@ class Association(models.Model):
         on_delete=models.SET_NULL,
         related_name="current_for_association",
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.association_short_name} ({self.association_type})"
@@ -105,6 +104,7 @@ class Notification(models.Model):
     message = models.TextField()
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Notification for {self.association.association_short_name}: {self.message[:20]}"

@@ -6,10 +6,12 @@ from .views import (
     PaymentStatusView,
     TransactionReceiptDetailView,
     TransactionViewSet,
+    AdminTransactionReceiptViewSet,
     ercaspay_webhook,
 )
 
 router = DefaultRouter()
+router.register("admin-receipts", AdminTransactionReceiptViewSet, basename="admin-receipts")
 router.register("", TransactionViewSet)
 
 urlpatterns = [

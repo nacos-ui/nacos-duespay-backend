@@ -27,7 +27,10 @@ class Payer(models.Model):
     matric_number = models.CharField(max_length=50)
     faculty = models.CharField(max_length=100, blank=True, null=True)
     department = models.CharField(max_length=100, blank=True, null=True)
+    otp_code = models.CharField(max_length=6, blank=True, null=True)
+    otp_expires_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [

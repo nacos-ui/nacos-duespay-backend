@@ -12,9 +12,17 @@ class AssociationSerializer(serializers.ModelSerializer):
     bank_account = ReceiverBankAccountSerializer(read_only=True)
     payment_items = serializers.SerializerMethodField()
     logo_url = serializers.ReadOnlyField()
-    admin_email = serializers.ReadOnlyField(source="admin.email")
-    admin_phone = serializers.ReadOnlyField(source="admin.phone_number")
+    admin_email = serializers.SerializerMethodField()
+    admin_phone = serializers.SerializerMethodField()
     # payers = PayerSerializer(many=True, read_only=True)
+
+    def get_admin_email(self, obj):
+        admin = obj.admins.first()
+        return admin.email if admin else None
+
+    def get_admin_phone(self, obj):
+        admin = obj.admins.first()
+        return getattr(admin, 'phone_number', None) if admin else None
 
     def get_payment_items(self, obj):
         """Return payment items for the current session only"""
@@ -140,9 +148,9 @@ class AdminProfileSerializer(serializers.Serializer):
 
     def get_admin(self, obj):
         return {
-            "id": obj.admin.id,
-            "email": obj.admin.email,
-            # 'username': obj.admin.username,
-            "first_name": obj.admin.first_name,
-            "last_name": obj.admin.last_name,
+            "id": obj.id,
+            "email": obj.email,
+            "first_name": obj.first_name,
+            "last_name": obj.last_name,
+            "role": getattr(obj, "role", "admin"),
         }

@@ -33,7 +33,7 @@ def format_phone_number(phone: str) -> str:
     return digits or "0000000000"
 
 def get_ercaspay_base_url() -> str:
-    return getattr(settings, "ERCASPAY_BASE_URL", "https://api.ercaspay.com/api/v1")
+    return getattr(settings, "ERCASPAY_BASE_URL", "https://api.phoenix-wallet.ercaspay.com/api/v1")
 
 def compute_ercaspay_signature(raw: bytes, secret: str) -> str:
     return hmac.new(secret.encode("utf-8"), raw, hashlib.sha512).hexdigest()

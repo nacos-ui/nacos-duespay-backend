@@ -269,10 +269,12 @@ class AssociationProfileView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        return getattr(self.request.user, "association", None)
+        return self.request.user
 
     def retrieve(self, request, *args, **kwargs):
-        association = self.get_object()
+        admin_user = self.get_object()
+        association = getattr(admin_user, "association", None)
+        
         if not association:
             return Response(
                 {"error": "No association found for this admin user"},
@@ -284,7 +286,7 @@ class AssociationProfileView(generics.RetrieveAPIView):
             "-created_at"
         )
 
-        serializer = self.get_serializer(association)
+        serializer = self.get_serializer(admin_user)
         data = serializer.data
 
         # Add sessions list

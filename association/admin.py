@@ -10,9 +10,8 @@ class AssociationAdmin(ModelAdmin):
         "association_name",
         "association_short_name",
         "association_type",
-        "admin",
     )
-    search_fields = ("association_name", "association_short_name", "admin__username")
+    search_fields = ("association_name", "association_short_name")
     list_filter = ("association_type",)
 
 

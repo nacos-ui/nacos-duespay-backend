@@ -196,3 +196,62 @@ def logout_all(request):
     user.token_version += 1
     user.save(update_fields=["token_version"])
     return Response({"message": "Logged out from all devices"})
+
+
+from .serializers import AdminUserListSerializer, AdminUserCreateSerializer, AdminUserUpdateRoleSerializer
+
+class AssociationAdminsAPIView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return AdminUserCreateSerializer
+        return AdminUserListSerializer
+
+    def get_queryset(self):
+        # Return all admins for the user's association
+        association = getattr(self.request.user, "association", None)
+        if not association:
+            return AdminUser.objects.none()
+        return AdminUser.objects.filter(association=association).order_by("-created_at")
+
+    def create(self, request, *args, **kwargs):
+        if getattr(request.user, "role", "") != "superadmin":
+            return Response({"error": "Only a superadmin can add new admins."}, status=403)
+        return super().create(request, *args, **kwargs)
+
+
+class AssociationAdminDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get_serializer_class(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return AdminUserUpdateRoleSerializer
+        return AdminUserListSerializer
+
+    def get_queryset(self):
+        association = getattr(self.request.user, "association", None)
+        if not association:
+            return AdminUser.objects.none()
+        return AdminUser.objects.filter(association=association)
+
+    def update(self, request, *args, **kwargs):
+        if getattr(request.user, "role", "") != "superadmin":
+            return Response({"error": "Only a superadmin can promote or demote admins."}, status=403)
+        
+        instance = self.get_object()
+        if instance == request.user:
+            return Response({"error": "You cannot change your own role."}, status=400)
+            
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if getattr(request.user, "role", "") != "superadmin":
+            return Response({"error": "Only a superadmin can remove admins."}, status=403)
+            
+        instance = self.get_object()
+        if instance == request.user:
+            return Response({"error": "You cannot remove yourself."}, status=400)
+            
+        return super().destroy(request, *args, **kwargs)

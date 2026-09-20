@@ -10,7 +10,7 @@ def notify_admin_on_transaction(sender, instance, created, **kwargs):
     if created:
         association = instance.association
         print(f"DEBUG: Association: {association}")
-        admin = getattr(association, "admin", None)
+        admin = association.admins.first()
         print(f"DEBUG: Admin: {admin}")
         if admin and admin.email:
             print(f"DEBUG: Sending email to admin: {admin.email}")

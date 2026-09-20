@@ -11,17 +11,24 @@ class TransactionSerializer(serializers.ModelSerializer):
     payer_email = serializers.CharField(source="payer.email", read_only=True)
     payer_name = serializers.SerializerMethodField()
     proof_of_payment_url = serializers.ReadOnlyField()
+    receipt_id = serializers.SerializerMethodField()
+    session_title = serializers.CharField(source="session.title", read_only=True)
 
     class Meta:
         model = Transaction
         fields = "__all__"
-        read_only_fields = ["payer_name", "payment_item", "payer_matric", "payer_email", "proof_of_payment_url"]
+        read_only_fields = ["payer_name", "payment_item", "payer_matric", "payer_email", "proof_of_payment_url", "receipt_id", "session_title"]
 
     def get_payment_item_titles(self, obj):
         return [item.title for item in obj.payment_items.all()]
 
     def get_payer_name(self, obj):
         return f"{obj.payer.first_name} {obj.payer.last_name}"
+
+    def get_receipt_id(self, obj):
+        if hasattr(obj, "receipt"):
+            return obj.receipt.receipt_id
+        return None
 
     def create(self, validated_data):
         user = self.context["request"].user
@@ -106,3 +113,28 @@ class TransactionReceiptDetailSerializer(serializers.ModelSerializer):
 
     def get_items_paid(self, obj):
         return [item.title for item in obj.transaction.payment_items.all()]
+
+class AdminTransactionReceiptSerializer(serializers.ModelSerializer):
+    transaction_reference_id = serializers.CharField(source='transaction.reference_id')
+    payer_first_name = serializers.CharField(source='transaction.payer.first_name')
+    payer_last_name = serializers.CharField(source='transaction.payer.last_name')
+    payer_matric = serializers.CharField(source='transaction.payer.matric_number')
+    payer_email = serializers.CharField(source='transaction.payer.email')
+    amount_paid = serializers.DecimalField(source='transaction.amount_paid', max_digits=10, decimal_places=2)
+    session_title = serializers.CharField(source='transaction.session.title', allow_null=True)
+
+    class Meta:
+        model = TransactionReceipt
+        fields = [
+            'id',
+            'receipt_id',
+            'receipt_no',
+            'transaction_reference_id',
+            'payer_first_name',
+            'payer_last_name',
+            'payer_matric',
+            'payer_email',
+            'amount_paid',
+            'session_title',
+            'issued_at',
+        ]
