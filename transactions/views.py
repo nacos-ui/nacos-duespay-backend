@@ -45,6 +45,12 @@ class TransactionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = TransactionPagination
 
+    def perform_update(self, serializer):
+        # If an admin manually marks the transaction as verified, also mark it as not expired
+        if serializer.validated_data.get('is_verified', False):
+            serializer.validated_data['is_expired'] = False
+        serializer.save()
+
     def get_queryset(self):
         association = getattr(self.request.user, "association", None)
         queryset = Transaction.objects.none()
@@ -490,9 +496,10 @@ def ercaspay_webhook(request):
             fee = data.get("fee", 0)
             
             txn.is_verified = True
+            txn.is_expired = False
             txn.total_amount = total_paid
             txn.charge_amount = fee
-            txn.save(update_fields=["is_verified", "total_amount", "charge_amount"])
+            txn.save(update_fields=["is_verified", "is_expired", "total_amount", "charge_amount"])
             
             logger.info(f"[ERCASPAY_WEBHOOK][VERIFIED] ref={txn.reference_id} status={status_str} amount={total_paid}")
             print(f"[{timezone.now().isoformat()}] ERCASPAY VERIFIED ref={txn.reference_id}")
@@ -545,10 +552,12 @@ class PaymentStatusView(APIView):
                                 fee = data.get("fee", 0)
 
                                 lock_txn.is_verified = True
+                                lock_txn.is_expired = False
                                 lock_txn.total_amount = total_paid
                                 lock_txn.charge_amount = fee
-                                lock_txn.save(update_fields=["is_verified", "total_amount", "charge_amount"])
+                                lock_txn.save(update_fields=["is_verified", "is_expired", "total_amount", "charge_amount"])
                                 txn.is_verified = True  # Update local object for response
+                                txn.is_expired = False
                                 
                                 logger.info(f"[PAYMENT_STATUS][POLLING_VERIFIED] ref={lock_txn.reference_id} status={status_str}")
                                 print(f"[{timezone.now().isoformat()}] POLLING VERIFIED ref={lock_txn.reference_id}")
@@ -586,11 +595,12 @@ class AdminTransactionReceiptViewSet(viewsets.ReadOnlyModelViewSet):
         if session:
             queryset = queryset.filter(transaction__session_id=session)
 
-        # Search by receipt_no, matric_number, email, first_name, last_name
+        # Search by receipt_no, matric_number, email, first_name, last_name, or reference_id
         search = self.request.query_params.get('search')
         if search:
             queryset = queryset.filter(
                 models.Q(receipt_no__icontains=search) |
+                models.Q(transaction__reference_id__icontains=search) |
                 models.Q(transaction__payer__first_name__icontains=search) |
                 models.Q(transaction__payer__last_name__icontains=search) |
                 models.Q(transaction__payer__matric_number__icontains=search) |
