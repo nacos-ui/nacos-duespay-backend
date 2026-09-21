@@ -275,6 +275,13 @@ class InitiatePaymentView(APIView):
         try:
             payer = Payer.objects.get(pk=data["payer_id"])
             association = Association.objects.get(pk=data["association_id"])
+            
+            if getattr(association, "is_maintenance_mode", False):
+                return Response(
+                    {"error": "The payment system is currently under maintenance. Please try again later."},
+                    status=503
+                )
+                
             session = Session.objects.get(
                 pk=data["session_id"], association=association
             )
