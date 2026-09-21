@@ -304,6 +304,10 @@ class PayerViewSet(viewsets.ModelViewSet):
                 # No session available, return empty queryset
                 queryset = Payer.objects.none()
 
+            # dY" CRITICAL: Prevent N+1 queries for large page sizes
+            from django.db.models import Count
+            queryset = queryset.annotate(total_transactions_count=Count('transactions'))
+
         # Order by creation date
         queryset = queryset.order_by("-created_at")
 

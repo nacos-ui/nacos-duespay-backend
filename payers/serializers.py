@@ -12,7 +12,7 @@ class PayerSerializer(serializers.ModelSerializer):
         read_only_fields = ["association"]
 
     def get_total_transactions(self, obj):
-        return obj.transactions.count()
+        return getattr(obj, 'total_transactions_count', obj.transactions.count())
 
     def create(self, validated_data):
         user = self.context["request"].user

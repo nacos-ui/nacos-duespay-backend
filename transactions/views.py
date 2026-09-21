@@ -76,6 +76,9 @@ class TransactionViewSet(viewsets.ModelViewSet):
             else:
                 # No session available, return empty queryset
                 queryset = Transaction.objects.none()
+                
+            # dY" CRITICAL: Prevent N+1 queries for large page sizes (exports)
+            queryset = queryset.select_related("payer", "session", "receipt").prefetch_related("payment_items")
 
         # Filter by verification status (case-insensitive)
         status_param = self.request.query_params.get("status")
